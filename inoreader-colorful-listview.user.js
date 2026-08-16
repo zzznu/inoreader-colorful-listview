@@ -1,54 +1,84 @@
 // ==UserScript==
-// @name         Inoreader Colorful Listview v2
+// @name         Inoreader Colorful Listview
 // @namespace    http://inoreader.colorful.list.view
-// @version      2.0.0
-// @description  Inoreaderの記事リストをフィードソースごとにカラーリングする（高速・省メモリ版）
-// @author       Based on yamalight's feedly-colorful-list-view
+// @version      1.0.0
+// @description  Inoreaderの記事リストをフィードソースごとにカラーリングする
+// @author       zzznu
+// @license      MIT
 // @match        https://*.inoreader.com/*
 // @match        https://inoreader.com/*
 // @grant        GM_addStyle
 // @run-at       document-idle
 // @noframes
+// @homepageURL  https://github.com/zzznu/inoreader-colorful-listview
+// @supportURL   https://github.com/zzznu/inoreader-colorful-listview/issues
+// @downloadURL  https://raw.githubusercontent.com/zzznu/inoreader-colorful-listview/main/inoreader-colorful-listview.user.js
+// @updateURL    https://raw.githubusercontent.com/zzznu/inoreader-colorful-listview/main/inoreader-colorful-listview.user.js
 // ==/UserScript==
+//
+// Inspired by yamalight/feedly-colorful-list-view
+// https://github.com/yamalight/feedly-colorful-list-view
 
 (function () {
   'use strict';
 
   // -------------------------------------------------------
-  // 設定（ライトテーマ用）
+  // 設定（ライト/ダーク両対応）
+  // 背景色を上書きせず半透明の色を重ねるため、
+  // Inoreader側の地の色（ライト=白 / ダーク=黒）がそのまま残り、
+  // どちらのテーマでも文字のコントラストが保たれる
   // -------------------------------------------------------
-  const LIGHTNESS = 92;        // 通常時の背景明度(%)
-  const LIGHTNESS_HOVER = 86;  // ホバー時の背景明度(%)
+  const TINT = 0.18;           // 通常時の着色の濃さ(0-1)
+  const TINT_HOVER = 0.32;     // ホバー時の着色の濃さ(0-1)
   const SAT_MIN = 35;          // 彩度の下限(%)
   const SAT_RANGE = 40;        // 彩度の振れ幅(%)
 
   // -------------------------------------------------------
   // セレクタ候補（新旧UI対応）
   // -------------------------------------------------------
+  // 意図的に限定的なセレクタのみを使う。
+  // [data-index] や .source のような汎用セレクタは、UI変更時に
+  // サイドバー等の無関係な要素まで着色してしまうため採用しない。
+  // 全て空振りした場合は「何も塗らない」で安全側に倒す
   const ROW_SELECTORS = [
     '.article_tile',           // 新デザイン（タイル/リストビュー共通）
     '.ar',                     // 旧デザイン
-    '[data-index]',            // 仮想スクロール系
   ];
   const TITLE_SELECTORS = [
     '.article_tile_source',    // 新デザイン
     '.article_feed_title',     // 旧デザイン
     '.feed_title',             // 中間デザイン
     '.story_feed_title',       // 別バリアント
-    '.source',                 // フォールバック
   ];
 
   // -------------------------------------------------------
   // 静的CSS（注入はこの一度だけ。フィード数が増えてもstyleは増えない）
   // 色は行ごとのCSSカスタムプロパティで渡す
+  //
+  // background-color ではなく background-image に単色グラデーションを敷く。
+  // background-color は触らないので、Inoreaderの既読/選択中のハイライトも生き残る
   // -------------------------------------------------------
-  GM_addStyle(`
+  const tint = (alpha) => {
+    const c = `hsl(var(--ino-h) var(--ino-s) 50% / ${alpha})`;
+    return `linear-gradient(${c}, ${c})`;
+  };
+
+  // GM_addStyle を提供しない環境（Greasemonkey系など）では
+  // ReferenceError でスクリプト全体が停止するため素の実装で代替する
+  const addStyle =
+    typeof GM_addStyle === 'function'
+      ? GM_addStyle
+      : (css) =>
+          document.head.appendChild(
+            Object.assign(document.createElement('style'), { textContent: css })
+          );
+
+  addStyle(`
     [data-ino-color] {
-      background: hsl(var(--ino-h) var(--ino-s) ${LIGHTNESS}%) !important;
-      transition: background 0.15s ease;
+      background-image: ${tint(TINT)} !important;
     }
     [data-ino-color]:hover {
-      background: hsl(var(--ino-h) var(--ino-s) ${LIGHTNESS_HOVER}%) !important;
+      background-image: ${tint(TINT_HOVER)} !important;
     }
     .article_tile.unread .article_tile_source,
     .article_tile.unread .feed_title,
